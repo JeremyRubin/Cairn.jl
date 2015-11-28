@@ -83,7 +83,7 @@ function CairnActionHandler(px::Rock.Server.Paxos, d::SQLite.DB, v::Cairn.RPC.Ge
     Rock.Server.self(px)
 end
 function CairnActionHandler(px::Rock.Server.Paxos, d::SQLite.DB, v::Cairn.RPC.PrepareCache)
-    SQLite.query(d, "insert or replace into results_cache (uuid, val, state) values  (?, ?, ?)", [v.id, Nullable(), Loading])
+    SQLite.query(d, "insert or replace into results_cache (uuid, val, state) values  (?, ?, ?)", [v.id, Nullable(), Cairn.RPC.Loading])
     true
 end
 function CairnActionHandler(px::Rock.Server.Paxos, d::SQLite.DB, v::Cairn.RPC.FetchCache)
@@ -93,11 +93,11 @@ function CairnActionHandler(px::Rock.Server.Paxos, d::SQLite.DB, v::Cairn.RPC.Fe
         state = NullableArrays.dropnull(data[2])
         if length(val) == 1
             try
-                if state[1] == Ready
+                if state[1] == Cairn.RPC.Ready
                     return Cairn.RPC.CacheResult(val[1], state[1])
                 end
             finally
-                if v.evict && state[1] == Ready
+                if v.evict && state[1] == Cairn.RPC.Ready
                     SQLite.query(d, "delete from results_cache where (uuid = ?)", [v.id])
                 end
             end
@@ -113,7 +113,7 @@ function CairnActionHandler(px::Rock.Server.Paxos, d::SQLite.DB, v::Cairn.RPC.Ca
         vec = Vector(3)
         vec[1] = v.id
         vec[2] = r
-        vec[3] = Ready
+        vec[3] = Cairn.RPC.Ready
         SQLite.query(d, "insert or replace into results_cache (uuid, val, state) values (?,?,?)", vec)
     end
     ()
@@ -149,9 +149,9 @@ function CairnActionHandler(px::Rock.Server.Paxos,d::SQLite.DB, t::Cairn.RPC.Fil
         zip(data[1] |> NullableArrays.dropnull, data[2] |> NullableArrays.dropnull) |> collect
     end
     if length(r) < 1
-        Cairn.RPC.FileLocation([], NotFound)
+        Cairn.RPC.FileLocation([], Cairn.RPC.NotFound)
     else
-        Cairn.RPC.FileLocation(r, Ok)
+        Cairn.RPC.FileLocation(r, Cairn.RPC.Ok)
     end
 end
 function CairnActionHandler(px::Rock.Server.Paxos,d::SQLite.DB, t::Cairn.RPC.DeadStorageNode)
