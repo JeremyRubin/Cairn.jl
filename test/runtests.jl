@@ -44,7 +44,6 @@ mktempdir() do tmpd
     @info "FS Nodes started"
 
     # Connect to the cluster
-    # wait(Timer(10))
     c = Cairn.Client.make("localhost", 8001)
     while true
         try
@@ -58,11 +57,10 @@ mktempdir() do tmpd
         end
         wait(Timer(1))
     end
-    wait(Timer(5))
     tmp = ASCIIString(mktemp()[1])
     while true
         try
-            d  =Cairn.Client.download(c, upload_name, tmp)
+            d  = Cairn.Client.download(c, upload_name, tmp)
             @test d == test_data
             break
         catch err

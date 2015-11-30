@@ -94,6 +94,10 @@ function CairnActionHandler(px::Rock.Server.t, d::SQLite.DB, arg::Cairn.RPC.Crea
     catch err
         if isa(err, SQLite.SQLiteException)
             if err.msg == "UNIQUE constraint failed: objects.name"
+                SQLite.query(d,
+                             """
+                             select host, port from object_replicas where object_name = ?
+                             """, [arg.name]).data |> dropnull2
                 return Cairn.RPC.CreateResponse([], Nullable(ErrorException("File $(arg.name) Already Exists")))
             else
                 rethrow(err)
@@ -105,17 +109,38 @@ function CairnActionHandler(px::Rock.Server.t, d::SQLite.DB, arg::Cairn.RPC.Crea
     end
 
 end
-function CairnActionHandler(px::Rock.Server.t, d::SQLite.DB, arg::Cairn.RPC.GetChunksRequest)
-    data = SQLite.query(d,
-                        """
-                        select hash from host, port, chunks where object_name = ?
-                        group by hash order by id ASC
-                        """, [arg.name]).data
-    # TODO: ^^^ Verify
+function CairnActionHandler(px::Rock.Server.t, d::SQLite.DB, arg::Cairn.RPC.GetKeySpanRequest)
+    for key = arg.key_span
+        # Expand
+        items = if isa(key, Cairn.RPC.PrefixKey)
+            SQLite.query(d,
+                                """
+                                select object_name from chunks where object_name LIKE ? || '%'
+                                """, [key.prefix]).data[1] |> NullableArrays.dropnull
+            
+        else
+            [key]
+        end
+
+        # Get
+        response = Cairn.RPC.GetKeySpanResponse([])
+        for key = items
+            data = SQLite.query(d,
+                                """
+                                select host, port, hash from chunks where object_name = ?
+                                group by hash order by id ASC
+                                """, [key]).data
+            # TODO: ^^^ Verify
+            # TODO: ^^^ Return random replica?
+            
+            replicas = data |> dropnull2
+            hashes = data[3] |> NullableArrays.dropnull
+            put!(response.files, Cairn.RPC.GetKeySpanSubResponse(key, hashes, replicas, Nullable()))
+
+        end
+        response
+    end
     
-    replicas = data |> dropnull2
-    hashes = data[3] |> NullableArrays.dropnull
-    Cairn.RPC.GetChunksResponse(replicas, hashes, Nullable())
     
 end
 function CairnActionHandler(px::Rock.Server.t, d::SQLite.DB, arg::Cairn.RPC.DeleteRequest)
@@ -191,7 +216,7 @@ immutable t
     user_defined_function::Function
     rock::Rock.Server.t
 end
-function make(port,id, peers::Array{Tuple{ASCIIString, Int64},1}, path::ASCIIString)
+function make(port,id, peers::Vector{Tuple{ASCIIString, Int64}}, path::ASCIIString)
     d = SQLite.DB("$path/sqlite.db")
     SQLite.query(d,
                  """

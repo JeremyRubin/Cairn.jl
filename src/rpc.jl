@@ -3,14 +3,22 @@
 ################################
 module RPC
 
-import Rock
-using SimpleFileServer.File
+using Rock: ExternalCriticalCommand, ExternalNonCriticalCommand
+using SimpleFileServer: File
+# Just for clearer reading
+# TODO: Make Key check on construction for /
+typealias Key ASCIIString
+immutable PrefixKey
+    prefix::Key
+end
+# A FileSpan is a set of spans of keys, which can be represented as a range (eg A-B) with a prefix, or a list of exact keys
+typealias KeySpan Vector{Union{PrefixKey, Key}}
 
-abstract Command <: Rock.Server.ExternalCriticalCommand
-abstract View <: Rock.Server.ExternalNonCriticalCommand
+abstract Command <: ExternalCriticalCommand
+abstract View <: ExternalNonCriticalCommand
 typealias Slave Tuple{AbstractString, Int64}
-typealias ReplicaSet Array{Tuple{AbstractString, Int64}, 1}
-typealias Name AbstractString
+typealias ReplicaSet Vector{Tuple{AbstractString, Int64}}
+typealias Name Key
 typealias Hash AbstractString
 
 immutable AddStorageNode <: Command
@@ -26,13 +34,24 @@ immutable CreateResponse
     replicas::ReplicaSet
     err::Nullable{ErrorException}
 end
-immutable GetChunksRequest <: Command
-    name::Name
+immutable GetKeySpanRequest <: Command
+    key_span::KeySpan
 end
-immutable GetChunksResponse
-    replicas::ReplicaSet
-    hashes::Array{Hash,1}
+#=
+TODO:
+immutable FindChunkRequest
+
+end
+=#
+immutable GetKeySpanSubResponse
+    key::Key
+    hashes::Vector{Hash}
+    replicas::Vector{Slave}
     err::Nullable{ErrorException}
+end
+
+immutable GetKeySpanResponse
+    files::Vector{GetKeySpanResponse}
 end
 
 # Objects _May_ end with a DeleteObjectRequest (may also simply fail)
@@ -44,7 +63,8 @@ immutable DeleteResponse
 end
 
 immutable AppendChunksRequest <: Command
-    hashes::Array{Hash,1}
+    name::Name
+    hashes::Vector{Hash}
 end
 immutable AppendChunksResponse
     err::Nullable{ErrorException}
@@ -71,7 +91,7 @@ immutable TruncateResponse
 end
 
 immutable ManyCommandRequest <: Command
-    args::Array{Command, 1}
+    args::Vector{Command}
 end
 immutable ManyCommandResponse
     errs
